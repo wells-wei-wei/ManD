@@ -10,8 +10,14 @@
 #include <vector>
 #include <fcntl.h>
 #include <sys/epoll.h>
-
-using namespace std;
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <queue>
+#include <iostream>
+#include <ctime>
 
 class Daemon{
 public:
@@ -45,6 +51,7 @@ public:
         //初始化用于组播通信的socket
         _groupmsg_sock = socket(AF_INET, SOCK_DGRAM, 0);
         
+        _thread_pool.start();
     }
 
     int setnonblocking(int sockfd){
@@ -60,25 +67,34 @@ public:
             int epoll_fd_num = epoll_wait(_epoll_fd, events, 10000, -1);
             for(int n = 0; n < epoll_fd_num; ++n){
                 if (events[n].data.fd == _sys_sock){
-                    test(events[n].data.fd);
+                    Test t(events[n].data.fd);
+                    _thread_pool.appendTask(t);
                 }
             }
         }
     }
-
-    int test(int sock){
-        char recvbuf[1000];
-        struct sockaddr_in client_addr;
-        socklen_t cli_len=sizeof(client_addr);
-        int ret = recvfrom(sock, recvbuf, 1000, 0, (struct sockaddr *)&client_addr, &cli_len);
-        if (ret > 0)
+    class Test{
+    public:
+        Test(int sock):sock(sock){}
+        void operator()() const
         {
-            printf("socket %d 接收到来自:%s:%d的消息成功:’%s’，共%d个字节的数据/n",
-            sock, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), recvbuf, ret);
+            char recvbuf[1000];
+            struct sockaddr_in client_addr;
+            socklen_t cli_len=sizeof(client_addr);
+            int ret = recvfrom(sock, recvbuf, 1000, 0, (struct sockaddr *)&client_addr, &cli_len);
+            if (ret > 0)
+            {
+                //printf("socket %d 接收到来自:%s:%d的消息成功:’%s’，共%d个字节的数据/n",sock, inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port), recvbuf, ret);
+                printf("消息: %s", recvbuf);
+                std::thread::id tid = std::this_thread::get_id();
+                std::cout << "线程id = " << tid << std::endl;
+            }
         }
-    }
+    private:
+        int sock;
+    };
 
-    int send_groupmsg(string groupmsg_ip, string msg){
+    int send_groupmsg(std::string groupmsg_ip, std::string msg){
         //为socket设置组播发送方式
         memset(&_groupmsg_dst_ip, 0, sizeof(_groupmsg_dst_ip));
         inet_pton(AF_INET, groupmsg_ip.data(), &_groupmsg_dst_ip.imr_multiaddr);//设置组播目标IP
@@ -119,15 +135,106 @@ private:
     struct ip_mreq _groupmsg_dst_ip;
     struct sockaddr_in _groupmsg_sock_addr;
 
-    string _groupip_ori = "239.0.0.";
-    string _groupip_last = "1";
+    std::string _groupip_ori = "239.0.0.";
+    std::string _groupip_last = "1";
 
-    map<string, string> _map_groupname_groupip;
-    map<string, vector<string>> _map_groupip_groupmem;
+    std::map<std::string, std::string> _map_groupname_groupip;
+    std::map<std::string, std::vector<std::string>> _map_groupip_groupmem;
+
+    class ThreadPool{
+    public:
+        using Task = std::function<void()>;
+
+        explicit ThreadPool(int num): _thread_num(num), _is_running(false){}
+
+        ThreadPool(): _thread_num(20), _is_running(false){}
+        ~ThreadPool()
+        {
+            if (_is_running)
+                stop();
+        }
+
+        void start()
+        {
+            _is_running = true;
+
+            // start threads
+            for (int i = 0; i < _thread_num; i++)
+                _threads.emplace_back(std::thread(&ThreadPool::work, this));
+        }
+
+        void stop()
+        {
+            {
+                // stop thread pool, should notify all threads to wake
+                std::unique_lock<std::mutex> lk(_mtx);
+                _is_running = false;
+                _cond.notify_all(); // must do this to avoid thread block
+            }
+
+            // terminate every thread job
+            for (std::thread& t : _threads)
+            {
+                if (t.joinable())
+                    t.join();
+            }
+        }
+
+        void appendTask(const Task& task)
+        {
+            if (_is_running)
+            {
+                std::unique_lock<std::mutex> lk(_mtx);
+                _tasks.push(task);
+                _cond.notify_one(); // wake a thread to to the task
+            }
+        }
+
+    private:
+        void work()
+        {
+
+            // every thread will compete to pick up task from the queue to do the task
+            while (_is_running)
+            {                
+                Task task;
+                {
+                    std::unique_lock<std::mutex> lk(_mtx);
+                    if (!_tasks.empty())
+                    {
+                        // if tasks not empty, 
+                        // must finish the task whether thread pool is running or not
+                        task = _tasks.front();
+                        _tasks.pop(); // remove the task
+                    }
+                    else if (_is_running && _tasks.empty())
+                        _cond.wait(lk);
+                }
+
+                if (task)
+                    task(); // do the task
+            }
+
+        }
+
+    public:
+        // disable copy and assign construct
+        ThreadPool(const ThreadPool&) = delete;
+        ThreadPool& operator=(const ThreadPool& other) = delete;
+
+    private:
+        std::atomic_bool _is_running; // thread pool manager status
+        std::mutex _mtx;
+        std::condition_variable _cond;
+        int _thread_num;
+        std::vector<std::thread> _threads;
+        std::queue<Task> _tasks;
+    } _thread_pool;
 };
 
 int main(){
     Daemon dae;
     dae.init();
-    
+    //dae.send_groupmsg("239.0.0.2", "hello wells");
+    dae.event_loop();
 }
