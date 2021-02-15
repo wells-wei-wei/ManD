@@ -125,3 +125,9 @@ private:
     map<string, string> _map_groupname_groupip;
     map<string, vector<string>> _map_groupip_groupmem;
 };
+
+int main(){
+    Daemon dae;
+    dae.init();
+    
+}
