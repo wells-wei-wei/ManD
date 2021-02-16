@@ -129,6 +129,9 @@ public:
             printf("接受消息出错");
             return;
         }
+        /*
+        消息的基本格式是MD1204#00#XXXXX
+        */
         std::string recv_msg(recvbuf);
         //printf(recvbuf);
         std::vector<std::string> msg_part = split(recv_msg ,"#");
