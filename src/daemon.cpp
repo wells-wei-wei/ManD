@@ -266,7 +266,7 @@ public:
 
             std::string txt = msg_part[0]+"#51#"+msg_part[3];
 
-            send_groupmsg(groupmsg_ip, msg_part[3]);
+            send_groupmsg(groupmsg_ip, txt);
             std::cout<<"任务id： "<<msg_part[0]<<" 源ip："<<inet_ntoa(client_addr.sin_addr)<<"已经向组:"<<msg_part[2]<<"（组播ip为："<<_map_groupname_groupip[msg_part[2]]<<"）发出组播消息："<<txt<<std::endl;
         }
         return;

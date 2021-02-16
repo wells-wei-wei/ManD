@@ -81,13 +81,13 @@ public:
 
     void join(std::string name){
         std::string task_id = "MD"+strRand(4);
-        std::string msg = task_id+"#20#"+name+"\0";
-        std::cout<<msg<<std::endl;
+        std::string msg = task_id+"#20#"+name;
+        //std::cout<<msg<<std::endl;
         char buf[1024];
         memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
-        printf(buf);
-        std::cout<<""<<std::endl;
+        //printf(buf);
+        //std::cout<<""<<std::endl;
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
             memset(buf,'\0',sizeof(buf));
@@ -97,7 +97,7 @@ public:
             std::string recv_msg(buf);
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || (msg_part[1]!="21")) continue;
-            std::cout<<msg_part[2]<<std::endl;
+            //std::cout<<msg_part[2]<<std::endl;
             struct ip_mreqn group;
             inet_pton(AF_INET, msg_part[2].data(), &group.imr_multiaddr);
             inet_pton(AF_INET, "0.0.0.0", &group.imr_address);
@@ -180,6 +180,7 @@ public:
                 return"recieve data fail!";
             }
             std::string recv_msg(buf);
+            std::cout<<recv_msg<<std::endl;
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0].substr(0, 2)!="MD" || (msg_part[1]!="41" && msg_part[1]!="51")) continue;
 
