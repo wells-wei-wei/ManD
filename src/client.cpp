@@ -43,14 +43,16 @@ public:
         std::string task_id = "MD"+strRand(4);
         std::string msg = task_id+"#00#"+name;
         char buf[1024];
+        memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
-            memset(buf, 0, BUFF_LEN);
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in src;
             socklen_t len=sizeof(src);
             recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&src, &len);
             std::string recv_msg(buf);
+            std::cout<<recv_msg<<std::endl;
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || msg_part[1]!="01" || msg_part[2]!="连接成功") continue;
             return;
@@ -61,14 +63,16 @@ public:
         std::string task_id = "MD"+strRand(4);
         std::string msg = task_id+"#10#"+name;
         char buf[1024];
+        memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
-            memset(buf, 0, BUFF_LEN);
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in src;
             socklen_t len=sizeof(src);
             recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&src, &len);
             std::string recv_msg(buf);
+            std::cout<<recv_msg<<std::endl;
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || (msg_part[1]!="11")|| msg_part[2]!="已断开连接") continue;
             return;
@@ -77,19 +81,23 @@ public:
 
     void join(std::string name){
         std::string task_id = "MD"+strRand(4);
-        std::string msg = task_id+"#20#"+name;
+        std::string msg = task_id+"#20#"+name+"\0";
+        std::cout<<msg<<std::endl;
         char buf[1024];
+        memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
+        printf(buf);
+        std::cout<<""<<std::endl;
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
-            memset(buf, 0, BUFF_LEN);
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in src;
             socklen_t len=sizeof(src);
             recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&src, &len);
             std::string recv_msg(buf);
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || (msg_part[1]!="21")) continue;
-
+            std::cout<<msg_part[2]<<std::endl;
             struct ip_mreqn group;
             inet_pton(AF_INET, msg_part[2].data(), &group.imr_multiaddr);
             inet_pton(AF_INET, "0.0.0.0", &group.imr_address);
@@ -103,14 +111,16 @@ public:
         std::string task_id = "MD"+strRand(4);
         std::string msg = task_id+"#30#"+name;
         char buf[1024];
+        memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
-            memset(buf, 0, BUFF_LEN);
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in src;
             socklen_t len=sizeof(src);
             recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&src, &len);
             std::string recv_msg(buf);
+            std::cout<<recv_msg<<std::endl;
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || (msg_part[1]!="31")|| msg_part[2]!="已退出") continue;
             return;
@@ -121,14 +131,16 @@ public:
         std::string task_id = "MD"+strRand(4);
         std::string msg = task_id+"#40#"+dst+"#"+txt;
         char buf[1024];
+        memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
-            memset(buf, 0, BUFF_LEN);
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in src;
             socklen_t len=sizeof(src);
             recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&src, &len);
             std::string recv_msg(buf);
+            std::cout<<recv_msg<<std::endl;
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || (msg_part[1]!="43")|| msg_part[2]!="已收到") continue;
             return;
@@ -139,14 +151,16 @@ public:
         std::string task_id = "MD"+strRand(4);
         std::string msg = task_id+"#50#"+dst+"#"+txt;
         char buf[1024];
+        memset(buf,'\0',sizeof(buf));
         msg.copy(buf, msg.size(), 0);
         sendto(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&daemon_addr, sizeof(daemon_addr));
         while(1){
-            memset(buf, 0, BUFF_LEN);
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in src;
             socklen_t len=sizeof(src);
             recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&src, &len);
             std::string recv_msg(buf);
+            std::cout<<recv_msg<<std::endl;
             std::vector<std::string> msg_part = split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0]!=task_id || (msg_part[1]!="53")|| msg_part[2]!="已收到") continue;
             return;
@@ -156,13 +170,14 @@ public:
     std::string receive(){
         while(1){
             char buf[BUFF_LEN];
+            memset(buf,'\0',sizeof(buf));
             struct sockaddr_in source_addr;
             socklen_t len=sizeof(source_addr);
             int count = recvfrom(client_sock, buf, BUFF_LEN, 0, (struct sockaddr*)&source_addr, &len);  //recvfrom是拥塞函数，没有数据就一直拥塞
             if(count == -1)
             {
                 printf("recieve data fail!\n");
-                return;
+                return"recieve data fail!";
             }
             std::string recv_msg(buf);
             std::vector<std::string> msg_part = split(recv_msg ,"#");
@@ -231,6 +246,13 @@ private:
 int main(){
     client cli("10.203.161.35", 9000);
     //dae.send_groupmsg("239.0.0.2", "hello wells");
-    cli.connect("user1");
+    //cli.connect("user1");
+    //cli.join("d");
+    //cli.drop("d");
+    //cli.unicast("user1","hellop");
+    cli.multicast("d","hellopd");
+
+    //std::cout<<cli.receive()<<std::endl;
+
     
 }

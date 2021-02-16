@@ -143,6 +143,7 @@ public:
             _map_name_ip[msg_part[2]]=inet_ntoa(client_addr.sin_addr);
             std::string resbonse = msg_part[0]+"#01#连接成功";
             char return_buf[100];
+            memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
             client_addr.sin_port = htons(_client_sock_port);
             sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
@@ -153,6 +154,7 @@ public:
             if(_map_name_ip.count(msg_part[2]) == 0){
                 std::string resbonse = msg_part[0]+"#11#此IP尚未连接";
                 char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
                 resbonse.copy(return_buf, resbonse.size(), 0);
                 client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
@@ -161,6 +163,7 @@ public:
             _map_name_ip.erase(msg_part[2]);
             std::string resbonse = msg_part[0]+"#11#已断开连接";
             char return_buf[100];
+            memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
             client_addr.sin_port = htons(_client_sock_port);
             sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
@@ -177,6 +180,7 @@ public:
             
             std::string resbonse = msg_part[0]+"#21#"+_map_groupname_groupip[msg_part[2]];
             char return_buf[100];
+            memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
             client_addr.sin_port = htons(_client_sock_port);
             sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
@@ -187,9 +191,12 @@ public:
             if(_map_groupname_groupip.count(msg_part[2]) == 0){//这个组名不存在时
                 std::string resbonse = msg_part[0]+"#31#组名不存在";
                 char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
                 resbonse.copy(return_buf, resbonse.size(), 0);
                 client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                std::cout<<resbonse<<std::endl;
+                return;
             }
             
             std::vector<std::string>::iterator it;
@@ -200,6 +207,7 @@ public:
                 if_find=true;
                 std::string resbonse = msg_part[0]+"#31#已退出";
                 char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
                 resbonse.copy(return_buf, resbonse.size(), 0);
                 client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
@@ -209,15 +217,18 @@ public:
             if(!if_find){
                 std::string resbonse = msg_part[0]+"#31#组内没有当前IP";
                 char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
                 resbonse.copy(return_buf, resbonse.size(), 0);
                 client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                std::cout<<resbonse<<std::endl;
             }
         }
         else if(msg_part[1]=="40"){//单播
             if(_map_name_ip.count(msg_part[2]) == 0){//此时IP没有接入
                 std::string resbonse = msg_part[0]+"#43#此IP尚未接入";
                 char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
                 resbonse.copy(return_buf, resbonse.size(), 0);
                 client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
@@ -227,6 +238,7 @@ public:
             struct sockaddr_in temp_addr;
             std::string resbonse = msg_part[0]+"#41#"+msg_part[3];
             char return_buf[1024];
+            memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
 
             memset(&temp_addr, 0, sizeof(temp_addr));
@@ -238,19 +250,24 @@ public:
 
             std::cout<<"任务id： "<<msg_part[0]<<" 源ip："<<inet_ntoa(client_addr.sin_addr)<<"已经向ip:"<<_map_name_ip[msg_part[2]]<<" 发出单播消息："<<resbonse<<std::endl;
         }
-        else if(msg_part[1]=="51"){//组播
+        else if(msg_part[1]=="50"){//组播
             if(_map_groupname_groupip.count(msg_part[2]) == 0){//这个组名不存在时
                 std::string resbonse = msg_part[0]+"#53#此组不存在";
                 char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
                 resbonse.copy(return_buf, resbonse.size(), 0);
                 client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+                std::cout<<resbonse<<std::endl;
                 return;
             }
             std::string groupmsg_ip(_map_groupname_groupip[msg_part[2]]);
+            std::cout<<groupmsg_ip<<std::endl;
+
             std::string txt = msg_part[0]+"#51#"+msg_part[3];
+
             send_groupmsg(groupmsg_ip, msg_part[3]);
-            std::cout<<"任务id： "<<msg_part[0]<<" 源ip："<<inet_ntoa(client_addr.sin_addr)<<"已经向组:"<<msg_part[2]<<"（组播ip为："<<_map_name_ip[msg_part[2]]<<"）发出组播消息："<<txt<<std::endl;
+            std::cout<<"任务id： "<<msg_part[0]<<" 源ip："<<inet_ntoa(client_addr.sin_addr)<<"已经向组:"<<msg_part[2]<<"（组播ip为："<<_map_groupname_groupip[msg_part[2]]<<"）发出组播消息："<<txt<<std::endl;
         }
         return;
     }
