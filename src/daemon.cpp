@@ -39,7 +39,7 @@ int _groupmsg_sock;//用于组播通信的socket
 
 struct sockaddr_in _sys_sock_addr;//用于系统消息通信的地址
 const int _sys_sock_port = 9000;//用于系统消息通信的默认端口
-
+const int _client_sock_port = 8080;
 struct ip_mreq _groupmsg_dst_ip;
 struct sockaddr_in _groupmsg_sock_addr;
 
@@ -139,20 +139,20 @@ public:
         if(msg_part[1][0]=='0'){//连接daemon
             _map_name_ip[msg_part[2]]=inet_ntoa(client_addr.sin_addr);
             char return_buf[13] = "连接成功";
-            //client_addr.sin_port = htons(_sys_sock_port);
+            client_addr.sin_port = htons(_client_sock_port);
             sendto(sock, return_buf, 13, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
         }
         else if(msg_part[1][0]=='1'){//断开连接daemon
             if(_map_name_ip.count(msg_part[2]) == 0){
                 char return_buf[18] = "此IP尚未连接";
-                //client_addr.sin_port = htons(_sys_sock_port);
+                client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 18, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
             }
             _map_name_ip.erase(msg_part[2]);
 
-            char return_buf[10] = "OK";
-            //client_addr.sin_port = htons(_sys_sock_port);
-            sendto(sock, return_buf, 10, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+            char return_buf[20] = "已断开连接";
+            client_addr.sin_port = htons(_client_sock_port);
+            sendto(sock, return_buf, 20, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
         }
         else if(msg_part[1][0]=='2'){//加入组
             if (_map_groupname_groupip.count(msg_part[2]) == 0){//这个组名不存在时
@@ -164,13 +164,13 @@ public:
             
             char return_buf[100];
             _map_groupname_groupip[msg_part[2]].copy(return_buf,_map_groupname_groupip[msg_part[2]].size(),0);
-            client_addr.sin_port = htons(_sys_sock_port);
+            client_addr.sin_port = htons(_client_sock_port);
             sendto(sock, return_buf, 100, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
         }
         else if(msg_part[1][0]=='3'){//退出组
             if(_map_groupname_groupip.count(msg_part[2]) == 0){//这个组名不存在时
                 char return_buf[50] = "组名不存在";
-                client_addr.sin_port = htons(_sys_sock_port);
+                client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 50, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
             }
             
@@ -180,21 +180,21 @@ public:
                 if(*it == inet_ntoa(client_addr.sin_addr)) it=_map_groupip_groupmem[_map_groupname_groupip[msg_part[2]]].erase(it);
                 
                 if_find=true;
-                char return_buf[10]="OK";
-                client_addr.sin_port = htons(_sys_sock_port);
+                char return_buf[10]="已退出";
+                client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 10, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
                 break;
             }
             if(!if_find){
                 char return_buf[50]="组内没有当前IP";
-                client_addr.sin_port = htons(_sys_sock_port);
+                client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 50, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
             }
         }
         else if(msg_part[1][0]=='4'){//单播
             if(_map_name_ip.count(msg_part[2]) == 0){//此时IP没有接入
                 char return_buf[50] = "此IP尚未接入";
-                client_addr.sin_port = htons(_sys_sock_port);
+                client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 50, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
                 return;
             }
@@ -207,13 +207,13 @@ public:
             temp_addr.sin_family = AF_INET;
             temp_addr.sin_addr.s_addr = inet_addr(_map_name_ip[msg_part[2]].data());
             //temp_addr.sin_addr.s_addr = htonl(INADDR_ANY);  //注意网络序转换
-            temp_addr.sin_port = htons(_sys_sock_port);  //注意网络序转换
+            temp_addr.sin_port = htons(_client_sock_port);  //注意网络序转换
             sendto(sock, return_buf, 50, 0, (struct sockaddr*)&temp_addr, sizeof(temp_addr));
         }
         else if(msg_part[1][0]=='5'){//组播
             if(_map_groupname_groupip.count(msg_part[2]) == 0){//这个组名不存在时
                 char return_buf[50] = "此组不存在";
-                client_addr.sin_port = htons(_sys_sock_port);
+                client_addr.sin_port = htons(_client_sock_port);
                 sendto(sock, return_buf, 50, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
                 return;
             }
@@ -233,7 +233,7 @@ public:
         //构建发送目标结构体
         memset(&_groupmsg_sock_addr, 0, sizeof(_groupmsg_sock_addr));
         _groupmsg_sock_addr.sin_family		= AF_INET;
-        _groupmsg_sock_addr.sin_port		= htons(_sys_sock_port);		// 目标端口
+        _groupmsg_sock_addr.sin_port		= htons(_client_sock_port);		// 目标端口
         inet_pton(AF_INET, groupmsg_ip.data(), &_groupmsg_sock_addr.sin_addr.s_addr);// 目标的组地址
 
         char buf[MAXLINE];
