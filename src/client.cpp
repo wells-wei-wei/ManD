@@ -227,3 +227,10 @@ private:
         return buffer;
     }
 };
+
+int main(){
+    client cli("10.203.161.35", 9000);
+    //dae.send_groupmsg("239.0.0.2", "hello wells");
+    cli.connect("user1");
+    
+}
