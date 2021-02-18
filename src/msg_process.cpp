@@ -30,7 +30,7 @@ struct msg_struct{
 class MessageManager{
 //成员变量
 public:
-    typedef  void(*process_func)(msg_struct); // 定义消息处理函数的别名，有别名才能放在map中
+    typedef  void(MessageManager::*process_func)(msg_struct); // 定义消息处理函数的别名，有别名才能放在map中
     std::map<std::string, process_func>_map_msg_handler;//记录消息类型及其对应消息处理函数的map
     static std::map<std::string, std::string> _map_name_ip;//记录每个客户端名字及其IP地址的map
     static std::map<std::string, std::string> _map_groupname_groupip;//记录每个组名及其组播IP地址的map
@@ -42,7 +42,7 @@ public:
 
     struct ip_mreq _groupmsg_dst_ip;//设定组播ip
     struct sockaddr_in _groupmsg_sock_addr;//设定组播ip和端口
-    int _groupmsg_sock;//用于组播通信的socket
+    static int _groupmsg_sock;//用于组播通信的socket
     struct sockaddr_in _client_addr;//用于记录客户端地址
     int _sys_sock;//用于系统消息通信的socket（同时也用于单播）
     int ret;
@@ -210,10 +210,63 @@ private:
     }
 
 public:
+    MessageManager(){
+        register_msg_handler("00", process_00);
+        register_msg_handler("10", process_10);
+        register_msg_handler("20", process_20);
+        register_msg_handler("30", process_30);
+        register_msg_handler("40", process_40);
+        register_msg_handler("50", process_50);
+    };
     void register_msg_handler(std::string task_type, process_func func){
         _map_msg_handler[task_type]=func;
     }
     void on_message(msg_struct msg){
-        _map_msg_handler[msg.task_type](msg);
+        (this->*_map_msg_handler[msg.task_type])(msg);
     }
+};
+
+class Daemon{
+public:
+    Daemon(){
+        //初始化用于系统通信的socket
+        _sys_sock = socket(AF_INET, SOCK_DGRAM, 0);
+        if(_sys_sock < 0){
+            printf("create socket fail!\n");
+            return;
+        }
+
+        memset(&_sys_sock_addr, 0, sizeof(_sys_sock_addr));
+        _sys_sock_addr.sin_family = AF_INET;
+        _sys_sock_addr.sin_addr.s_addr = htonl(INADDR_ANY); //IP地址，需要进行网络序转换，INADDR_ANY：本地地址
+        _sys_sock_addr.sin_port = htons(_sys_sock_port);  //端口号，需要网络序转换
+
+        int opt=SO_REUSEADDR;
+        setsockopt(_sys_sock,SOL_SOCKET,SO_REUSEADDR,&opt,sizeof(opt));
+
+        setnonblocking(_sys_sock);
+
+        int ret = bind(_sys_sock, (struct sockaddr*)&_sys_sock_addr, sizeof(_sys_sock_addr));
+
+        struct epoll_event ev;
+        _epoll_fd = epoll_create(MAXEPOLLSIZE);
+        ev.events = EPOLLIN | EPOLLET;
+        ev.data.fd = _sys_sock;
+        epoll_ctl(_epoll_fd, EPOLL_CTL_ADD, _sys_sock, &ev);
+
+        MessageManager::_groupmsg_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    };
+    int setnonblocking(int sockfd){
+        if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFD, 0)|O_NONBLOCK) == -1)
+        {
+            return -1;
+        }
+        return 0;
+    }
+private:
+    int _epoll_fd;//用于守护进程io多路复用的epoll
+    int _sys_sock;//用于接受消息的socket
+    struct sockaddr_in _sys_sock_addr;//用于系统消息通信的地址
+    const int _sys_sock_port = 9000;//用于系统消息通信的默认端口
+    const int MAXEPOLLSIZE = 100;//epoll最大连接数
 };
