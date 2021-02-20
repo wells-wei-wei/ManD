@@ -190,19 +190,24 @@ public:
             return msg_part[2];
         }
     }
+    static client* get_instance(std::string daemon_ip, int daemon_port){
+        _singleton=new client(daemon_ip, daemon_port);
+        return _singleton;
+    }
 private:
     int ret;
     std::string daemon_ip;
     int daemon_port;
     struct sockaddr_in daemon_addr;
 
+    inline static client* _singleton;
 
     int client_sock;
     const int client_port = 8080;
     struct sockaddr_in client_addr;
 
     const int BUFF_LEN = 1024;
-
+    
     std::vector<std::string> split(const std::string& str,const std::string& delim) { 
         std::vector<std::string> res;
         if("" == str) return  res;
@@ -245,13 +250,14 @@ private:
 };
 
 int main(){
-    client cli("10.203.161.35", 9000);
+    client* cli=client::get_instance("10.203.161.35", 9000);
+    //client cli("10.203.161.35", 9000);
     //dae.send_groupmsg("239.0.0.2", "hello wells");
     //cli.connect("user1");
     //cli.join("d");
     //cli.drop("d");
     //cli.unicast("user1","hellop");
-    cli.multicast("d","hellopd");
+    cli->multicast("d","hellopd");
 
     //std::cout<<cli.receive()<<std::endl;
 
