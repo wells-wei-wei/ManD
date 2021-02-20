@@ -115,7 +115,7 @@ private:
             if(*it == inet_ntoa(_client_addr.sin_addr)) it=_map_groupip_groupmem[_map_groupname_groupip[msg.msg_0]].erase(it);
             
             if_find=true;
-            std::string resbonse = msg.task_id+"#31#已退出";
+            std::string resbonse = msg.task_id+"#31#"+_map_groupname_groupip[msg.msg_0];
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
