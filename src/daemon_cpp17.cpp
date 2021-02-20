@@ -19,6 +19,7 @@
 #include <future>
 #include <iostream>
 #include <ctime>
+#include <algorithm>
 
 struct msg_struct{
     std::string task_id;
@@ -26,17 +27,94 @@ struct msg_struct{
     std::string msg_0;
     std::string msg_1;
 };
+//定义需要用到的线程安全容器
+namespace thread_safe_utils{
+    
+    //线程安全字典
+    template<typename TKey, typename TValue>
+    class map
+    {
+    public:
+        map() 
+        {
+        }
 
+        virtual ~map() 
+        { 
+            std::lock_guard<std::mutex> locker(m_mutexMap);
+            m_map.clear(); 
+        }
+
+        TValue& operator [](const TKey& key) {
+		    std::lock_guard<std::mutex> locker(m_mutexMap);;
+		    return m_map[key];
+	    }
+
+        bool insert(const TKey &key, const TValue &value, bool cover = false)
+        {
+            std::lock_guard<std::mutex> locker(m_mutexMap);
+
+            auto find = m_map.find(key);
+            if (find != m_map.end() && cover)
+            {
+                m_map.erase(find);
+            }
+
+            auto result = m_map.insert(std::pair<TKey, TValue>(key, value));
+            return result.second;
+        }
+
+        void remove(const TKey &key)
+        {
+            std::lock_guard<std::mutex> locker(m_mutexMap);
+
+            auto find = m_map.find(key);
+            if (find != m_map.end())
+            {
+                m_map.erase(find);
+            }
+        }
+
+        bool lookup(const TKey &key, TValue &value)
+        {
+            std::lock_guard<std::mutex> locker(m_mutexMap);
+
+            auto find = m_map.find(key);
+            if (find != m_map.end())
+            {
+                value = (*find).second;
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        int size()
+        {
+            std::lock_guard<std::mutex> locker(m_mutexMap);
+            return m_map.size();
+        }
+
+    public:
+        std::mutex m_mutexMap;
+        std::map<TKey, TValue> m_map;
+    };
+}
 class MessageManager{
 //成员变量
 public:
     typedef  void(*process_func)(msg_struct, sockaddr_in, int); // 定义消息处理函数的别名，有别名才能放在map中
     std::map<std::string, process_func>_map_msg_handler;//记录消息类型及其对应消息处理函数的map
-    inline static std::map<std::string, std::string> _map_name_ip;//记录每个客户端名字及其IP地址的map
-    inline static std::map<std::string, std::string> _map_groupname_groupip;//记录每个组名及其组播IP地址的map
-    inline static std::map<std::string, std::vector<std::string>> _map_groupip_groupmem;//记录每个组播IP地址及其成员ip地址的map
+    inline static thread_safe_utils::map<std::string, std::string> _map_name_ip;//记录每个客户端名字及其IP地址的map
+    inline static thread_safe_utils::map<std::string, std::string> _map_groupname_groupip;//记录每个组名及其组播IP地址的map
+    inline static thread_safe_utils::map<std::string, std::vector<std::string>> _map_groupip_groupmem;//记录每个组播IP地址及其成员ip地址的map
+    inline static thread_safe_utils::map<std::string, sockaddr_in> _map_uni_task_addr;//记录单播时的任务和客户端地址
+    inline static thread_safe_utils::map<std::string, std::vector<std::string>> _map_multi_task_group;//记录单播时的任务和客户端地址
+
     inline static const  std::string _groupip_ori = "239.0.0.";//基本的组播ip地址
-    inline static int _groupip_last = 2;//准备往基本的组播ip地址后面接的数字
+    inline static std::atomic<int> _groupip_last;//准备往基本的组播ip地址后面接的数字
 
     static const int _client_sock_port = 8080;//客户端默认端口
 
@@ -47,7 +125,7 @@ public:
 private:
     //连接daemon
     static void process_00(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        _map_name_ip[msg.msg_0]=inet_ntoa(_client_addr.sin_addr);
+        _map_name_ip.insert(msg.msg_0, inet_ntoa(_client_addr.sin_addr));
         std::string resbonse = msg.task_id+"#01#连接成功";
         char return_buf[100];
         memset(return_buf,'\0',sizeof(return_buf));
@@ -59,7 +137,8 @@ private:
     }
     //断开daemon
     static void process_10(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        if(_map_name_ip.count(msg.msg_0) == 0){
+        std::string ip;
+        if(!_map_name_ip.lookup(msg.msg_0, ip)){
             std::string resbonse = msg.task_id+"#11#此IP尚未连接";
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
@@ -68,7 +147,7 @@ private:
             sendto(_sys_sock, return_buf, 100, 0, (struct sockaddr*)&_client_addr, sizeof(_client_addr));
             return;
         }
-        _map_name_ip.erase(msg.msg_0);
+        _map_name_ip.remove(msg.msg_0);
         std::string resbonse = msg.task_id+"#11#已断开连接";
         char return_buf[100];
         memset(return_buf,'\0',sizeof(return_buf));
@@ -80,12 +159,13 @@ private:
     }
     //加入组
     static void process_20(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        if (_map_groupname_groupip.count(msg.msg_0) == 0){//这个组名不存在时
+        std::string ip;
+        if (!_map_groupname_groupip.lookup(msg.msg_0, ip)){//这个组名不存在时
             std::string new_group_ip = _groupip_ori+std::to_string(_groupip_last);
             _groupip_last++;
-            _map_groupname_groupip[msg.msg_0]=new_group_ip;
+            _map_groupname_groupip.insert(msg.msg_0, new_group_ip);
         }
-        _map_groupip_groupmem[_map_groupname_groupip[msg.msg_0]].push_back(inet_ntoa(_client_addr.sin_addr));
+        _map_groupip_groupmem[ip].push_back(inet_ntoa(_client_addr.sin_addr));
         
         std::string resbonse = msg.task_id+"#21#"+_map_groupname_groupip[msg.msg_0];
         char return_buf[100];
@@ -98,7 +178,8 @@ private:
     }
     //退出组
     static void process_30(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        if(_map_groupname_groupip.count(msg.msg_0) == 0){//这个组名不存在时
+        std::string ip;
+        if(!_map_groupname_groupip.lookup(msg.msg_0, ip)){//这个组名不存在时
             std::string resbonse = msg.task_id+"#31#组名不存在";
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
@@ -111,17 +192,17 @@ private:
         
         std::vector<std::string>::iterator it;
         bool if_find=false;
-        for(it=_map_groupip_groupmem[_map_groupname_groupip[msg.msg_0]].begin();it!=_map_groupip_groupmem[_map_groupname_groupip[msg.msg_0]].end();++it){
-            if(*it == inet_ntoa(_client_addr.sin_addr)) it=_map_groupip_groupmem[_map_groupname_groupip[msg.msg_0]].erase(it);
+        for(it=_map_groupip_groupmem[ip].begin();it!=_map_groupip_groupmem[ip].end();++it){
+            if(*it == inet_ntoa(_client_addr.sin_addr)) it=_map_groupip_groupmem[ip].erase(it);
             
             if_find=true;
-            std::string resbonse = msg.task_id+"#31#"+_map_groupname_groupip[msg.msg_0];
+            std::string resbonse = msg.task_id+"#31#"+ip;
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
             _client_addr.sin_port = htons(_client_sock_port);
             sendto(_sys_sock, return_buf, 100, 0, (struct sockaddr*)&_client_addr, sizeof(_client_addr));
-            std::cout<<"任务id： "<<msg.task_id<<" ip："<<inet_ntoa(_client_addr.sin_addr)<<"已退出组:"<<msg.msg_0<<" 本组组播ip："<<_map_groupname_groupip[msg.msg_0]<<std::endl;
+            std::cout<<"任务id： "<<msg.task_id<<" ip："<<inet_ntoa(_client_addr.sin_addr)<<"已退出组:"<<msg.msg_0<<" 本组组播ip："<<ip<<std::endl;
             break;
         }
         if(!if_find){
@@ -136,7 +217,8 @@ private:
     }
     //单播
     static void process_40(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        if(_map_name_ip.count(msg.msg_0) == 0){//此时IP没有接入
+        std::string ip;
+        if(!_map_name_ip.lookup(msg.msg_0, ip)){//此时IP没有接入
             std::string resbonse = msg.task_id+"#43#此IP尚未接入";
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
@@ -154,16 +236,34 @@ private:
 
         memset(&temp_addr, 0, sizeof(temp_addr));
         temp_addr.sin_family = AF_INET;
-        temp_addr.sin_addr.s_addr = inet_addr(_map_name_ip[msg.msg_0].data());
+        temp_addr.sin_addr.s_addr = inet_addr(ip.data());
         //temp_addr.sin_addr.s_addr = htonl(INADDR_ANY);  //注意网络序转换
         temp_addr.sin_port = htons(_client_sock_port);  //注意网络序转换
         sendto(_sys_sock, return_buf, 1024, 0, (struct sockaddr*)&temp_addr, sizeof(temp_addr));
 
-        std::cout<<"任务id： "<<msg.task_id<<" 源ip："<<inet_ntoa(_client_addr.sin_addr)<<"已经向ip:"<<_map_name_ip[msg.msg_0]<<" 发出单播消息："<<resbonse<<std::endl;
+        _map_uni_task_addr.insert(msg.task_id, _client_addr);
+
+        std::cout<<"任务id： "<<msg.task_id<<" 源ip："<<inet_ntoa(_client_addr.sin_addr)<<"已经向ip:"<<ip<<" 发出单播消息："<<resbonse<<std::endl;
     }
+
+    static void process_42(msg_struct msg, sockaddr_in _cli_addr, int _sys_sock){
+        sockaddr_in source_addr;
+        if(!_map_uni_task_addr.lookup(msg.task_id, source_addr)) return;
+
+        std::string resbonse = msg.task_id+"#43#已收到";
+        char return_buf[100];
+        memset(return_buf,'\0',sizeof(return_buf));
+        resbonse.copy(return_buf, resbonse.size(), 0);
+        source_addr.sin_port = htons(_client_sock_port);
+        sendto(_sys_sock, return_buf, 100, 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+
+        _map_uni_task_addr.remove(msg.task_id);
+    }
+
     //组播
     static void process_50(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        if(_map_groupname_groupip.count(msg.msg_0) == 0){//这个组名不存在时
+        std::string ip;
+        if(!_map_groupname_groupip.lookup(msg.msg_0, ip)){//这个组名不存在时
             std::string resbonse = msg.task_id+"#53#此组不存在";
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
@@ -173,14 +273,37 @@ private:
             std::cout<<resbonse<<std::endl;
             return;
         }
-        std::string groupmsg_ip(_map_groupname_groupip[msg.msg_0]);
-        std::cout<<groupmsg_ip<<std::endl;
+        std::cout<<ip<<std::endl;
 
         std::string txt = msg.task_id+"#51#"+msg.msg_1;
 
-        send_groupmsg(_map_groupname_groupip[msg.msg_0], txt);
-        std::cout<<"任务id： "<<msg.task_id<<" 源ip："<<inet_ntoa(_client_addr.sin_addr)<<"已经向组:"<<msg.msg_0<<"（组播ip为："<<_map_groupname_groupip[msg.msg_0]<<"）发出组播消息："<<txt<<std::endl;
+        _map_multi_task_group.insert(msg.task_id, _map_groupip_groupmem[ip]);
+        _map_uni_task_addr.insert(msg.task_id, _client_addr);
+
+        send_groupmsg(ip, txt);
+        std::cout<<"任务id： "<<msg.task_id<<" 源ip："<<inet_ntoa(_client_addr.sin_addr)<<"已经向组:"<<msg.msg_0<<"（组播ip为："<<ip<<"）发出组播消息："<<txt<<std::endl;
     }
+
+    static void process_52(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
+        std::vector<std::string>::iterator it = std::find(_map_multi_task_group[msg.task_id].begin(), _map_multi_task_group[msg.task_id].end(), inet_ntoa(_client_addr.sin_addr));
+        if(it != _map_multi_task_group[msg.task_id].end()) _map_multi_task_group[msg.task_id].erase(it);
+
+        if(_map_multi_task_group[msg.task_id].size()==0){
+            sockaddr_in source_addr;
+            if(_map_uni_task_addr.lookup(msg.task_id, source_addr)){
+                std::string resbonse = msg.task_id+"#53#已收到";
+                char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
+                resbonse.copy(return_buf, resbonse.size(), 0);
+                source_addr.sin_port = htons(_client_sock_port);
+                sendto(_sys_sock, return_buf, 100, 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+
+                _map_uni_task_addr.remove(msg.task_id);
+                _map_uni_task_addr.remove(msg.task_id);
+            }
+        } 
+    }
+
     //发送组播消息
     static int send_groupmsg(std::string groupmsg_ip, std::string msg){
         int _groupmsg_sock;//用于组播通信的socket
@@ -216,7 +339,11 @@ public:
         register_msg_handler("20", process_20);
         register_msg_handler("30", process_30);
         register_msg_handler("40", process_40);
+        register_msg_handler("42", process_42);
         register_msg_handler("50", process_50);
+        register_msg_handler("52", process_52);
+
+        _groupip_last = 2;
     };
     void register_msg_handler(std::string task_type, process_func func){
         _map_msg_handler[task_type]=func;
@@ -419,7 +546,9 @@ private:
     const int _sys_sock_port = 9000;//用于系统消息通信的默认端口
     const int MAXEPOLLSIZE = 100;//epoll最大连接数
     struct epoll_event events[100];//记录到来的事件
-    ThreadPool _thread_pool;
+    ThreadPool _thread_pool;//线程池
+
+    thread_safe_utils::map<std::string, std::string>_map_unicast_name; 
 };
 
 int main(){
