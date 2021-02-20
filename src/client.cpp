@@ -247,6 +247,7 @@ public:
                 inet_pton(AF_INET, "0.0.0.0", &group.imr_address);
                 group.imr_ifindex = if_nametoindex("eth0");
                 setsockopt(client_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &group, sizeof(group));
+
                 return;
             }
         }
@@ -393,7 +394,23 @@ private:
             std::vector<std::string> msg_part = _singleton->split(recv_msg ,"#");
             if(msg_part.size()<3 || msg_part[0].substr(0, 2)!="MD") continue;
 
-            if(msg_part[1]=="41" || msg_part[1]=="51") _que_receive_msg.push(msg_part[2]);
+            if(msg_part[1]=="41" || msg_part[1]=="51"){
+                _que_receive_msg.push(msg_part[2]);
+                std::string resbonse = msg_part[0]+"#"+msg_part[1][0]+"2#已收到";
+                std::cout<<resbonse<<std::endl;
+                char return_buf[100];
+                memset(return_buf,'\0',sizeof(return_buf));
+                resbonse.copy(return_buf, resbonse.size(), 0);
+
+                if(msg_part[1]=="51"){
+                    memset(&source_addr, 0, sizeof(source_addr));
+                    source_addr.sin_family		= AF_INET;
+                    source_addr.sin_port		= htons(_singleton->daemon_port);		// 目标端口
+                    inet_pton(AF_INET, _singleton->daemon_ip.data(), &source_addr.sin_addr.s_addr);// 目标的组地址
+                }
+
+                sendto(_singleton->client_sock, return_buf, 100, 0, (struct sockaddr*)&source_addr, sizeof(source_addr));
+            } 
             if(msg_part[1]=="01" || msg_part[1]=="11" || msg_part[1]=="21" || msg_part[1]=="31" || msg_part[1]=="43" || msg_part[1]=="53") _map_receive_sys_msg.insert(msg_part[0], msg_part[2]);
         }
         return;
@@ -444,14 +461,22 @@ private:
 };
 
 int main(){
-    std::shared_ptr<client> cli(client::get_instance("10.203.161.35", 9000));
-    //client cli("10.203.161.35", 9000);
-    //dae.send_groupmsg("239.0.0.2", "hello wells");
-    //cli.connect("user1");
-    //cli.join("d");
+    std::shared_ptr<client> cli(client::get_instance("10.112.212.188", 9000));
+
+    cli->connect("user2");
+
+    int num;
+    while(!cli->mail_size(num)){} 
+    std::cout<<cli->receive()<<std::endl;
+
+    // cli->join("d");
+    // int num;
+    // while(!cli->mail_size(num)){} 
+    // std::cout<<cli->receive()<<std::endl;
+
     //cli.drop("d");
     //cli.unicast("user1","hellop");
-    cli->multicast("d","hellopd");
+    //cli->multicast("d","hellopd");
 
     //std::cout<<cli.receive()<<std::endl;
 

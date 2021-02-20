@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <net/if.h>
 #include <map>
+#include <set>
 #include <vector>
 #include <fcntl.h>
 #include <sys/epoll.h>
@@ -46,7 +47,7 @@ namespace thread_safe_utils{
         }
 
         TValue& operator [](const TKey& key) {
-		    std::lock_guard<std::mutex> locker(m_mutexMap);;
+		    std::lock_guard<std::mutex> locker(m_mutexMap);
 		    return m_map[key];
 	    }
 
@@ -109,9 +110,9 @@ public:
     std::map<std::string, process_func>_map_msg_handler;//记录消息类型及其对应消息处理函数的map
     inline static thread_safe_utils::map<std::string, std::string> _map_name_ip;//记录每个客户端名字及其IP地址的map
     inline static thread_safe_utils::map<std::string, std::string> _map_groupname_groupip;//记录每个组名及其组播IP地址的map
-    inline static thread_safe_utils::map<std::string, std::vector<std::string>> _map_groupip_groupmem;//记录每个组播IP地址及其成员ip地址的map
+    inline static thread_safe_utils::map<std::string, std::set<std::string>> _map_groupip_groupmem;//记录每个组播IP地址及其成员ip地址的map
     inline static thread_safe_utils::map<std::string, sockaddr_in> _map_uni_task_addr;//记录单播时的任务和客户端地址
-    inline static thread_safe_utils::map<std::string, std::vector<std::string>> _map_multi_task_group;//记录单播时的任务和客户端地址
+    inline static thread_safe_utils::map<std::string, std::set<std::string>> _map_multi_task_group;//记录组播时的任务和客户端地址
 
     inline static const  std::string _groupip_ori = "239.0.0.";//基本的组播ip地址
     inline static std::atomic<int> _groupip_last;//准备往基本的组播ip地址后面接的数字
@@ -161,11 +162,11 @@ private:
     static void process_20(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
         std::string ip;
         if (!_map_groupname_groupip.lookup(msg.msg_0, ip)){//这个组名不存在时
-            std::string new_group_ip = _groupip_ori+std::to_string(_groupip_last);
+            ip = _groupip_ori+std::to_string(_groupip_last);
             _groupip_last++;
-            _map_groupname_groupip.insert(msg.msg_0, new_group_ip);
+            _map_groupname_groupip.insert(msg.msg_0, ip);
         }
-        _map_groupip_groupmem[ip].push_back(inet_ntoa(_client_addr.sin_addr));
+        _map_groupip_groupmem[ip].insert(inet_ntoa(_client_addr.sin_addr));
         
         std::string resbonse = msg.task_id+"#21#"+_map_groupname_groupip[msg.msg_0];
         char return_buf[100];
@@ -174,7 +175,7 @@ private:
         _client_addr.sin_port = htons(_client_sock_port);
         sendto(_sys_sock, return_buf, 100, 0, (struct sockaddr*)&_client_addr, sizeof(_client_addr));
 
-        std::cout<<"任务id： "<<msg.task_id<<" ip："<<inet_ntoa(_client_addr.sin_addr)<<"已加入组:"<<msg.msg_0<<" 本组组播ip："<<_map_groupname_groupip[msg.msg_0]<<std::endl;
+        std::cout<<"任务id： "<<msg.task_id<<" ip："<<inet_ntoa(_client_addr.sin_addr)<<"已加入组:"<<msg.msg_0<<" 本组组播ip："<<_map_groupname_groupip[msg.msg_0]<<"，本组现有成员"<<_map_groupip_groupmem.size()<<"名"<<std::endl;
     }
     //退出组
     static void process_30(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
@@ -190,22 +191,18 @@ private:
             return;
         }
         
-        std::vector<std::string>::iterator it;
-        bool if_find=false;
-        for(it=_map_groupip_groupmem[ip].begin();it!=_map_groupip_groupmem[ip].end();++it){
-            if(*it == inet_ntoa(_client_addr.sin_addr)) it=_map_groupip_groupmem[ip].erase(it);
-            
-            if_find=true;
+        if(_map_groupip_groupmem[ip].count(inet_ntoa(_client_addr.sin_addr)) > 0){
+            _map_groupip_groupmem[ip].erase(inet_ntoa(_client_addr.sin_addr));
             std::string resbonse = msg.task_id+"#31#"+ip;
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
             resbonse.copy(return_buf, resbonse.size(), 0);
             _client_addr.sin_port = htons(_client_sock_port);
             sendto(_sys_sock, return_buf, 100, 0, (struct sockaddr*)&_client_addr, sizeof(_client_addr));
+
             std::cout<<"任务id： "<<msg.task_id<<" ip："<<inet_ntoa(_client_addr.sin_addr)<<"已退出组:"<<msg.msg_0<<" 本组组播ip："<<ip<<std::endl;
-            break;
         }
-        if(!if_find){
+        else{
             std::string resbonse = msg.task_id+"#31#组内没有当前IP";
             char return_buf[100];
             memset(return_buf,'\0',sizeof(return_buf));
@@ -273,7 +270,6 @@ private:
             std::cout<<resbonse<<std::endl;
             return;
         }
-        std::cout<<ip<<std::endl;
 
         std::string txt = msg.task_id+"#51#"+msg.msg_1;
 
@@ -281,12 +277,11 @@ private:
         _map_uni_task_addr.insert(msg.task_id, _client_addr);
 
         send_groupmsg(ip, txt);
-        std::cout<<"任务id： "<<msg.task_id<<" 源ip："<<inet_ntoa(_client_addr.sin_addr)<<"已经向组:"<<msg.msg_0<<"（组播ip为："<<ip<<"）发出组播消息："<<txt<<std::endl;
+        std::cout<<"任务id： "<<msg.task_id<<" 源ip："<<inet_ntoa(_client_addr.sin_addr)<<"已经向组:"<<msg.msg_0<<"（组播ip为："<<ip<<"，现有成员"<<_map_groupip_groupmem[ip].size()<<"个）发出组播消息："<<txt<<std::endl;
     }
 
     static void process_52(msg_struct msg, sockaddr_in _client_addr, int _sys_sock){
-        std::vector<std::string>::iterator it = std::find(_map_multi_task_group[msg.task_id].begin(), _map_multi_task_group[msg.task_id].end(), inet_ntoa(_client_addr.sin_addr));
-        if(it != _map_multi_task_group[msg.task_id].end()) _map_multi_task_group[msg.task_id].erase(it);
+        if(_map_multi_task_group[msg.task_id].count(inet_ntoa(_client_addr.sin_addr)) > 0) _map_multi_task_group[msg.task_id].erase(inet_ntoa(_client_addr.sin_addr));
 
         if(_map_multi_task_group[msg.task_id].size()==0){
             sockaddr_in source_addr;
@@ -306,7 +301,7 @@ private:
 
     //发送组播消息
     static int send_groupmsg(std::string groupmsg_ip, std::string msg){
-        int _groupmsg_sock;//用于组播通信的socket
+        int _groupmsg_sock = socket(AF_INET, SOCK_DGRAM, 0);;//用于组播通信的socket
         struct ip_mreq _groupmsg_dst_ip;//设定组播ip
         struct sockaddr_in _groupmsg_sock_addr;//设定组播ip和端口
 
