@@ -21,7 +21,7 @@ g++ main.cpp -I src -o bin/main -std=c++1z -pthread
 ```
 2. 在两个其他的设备（可以是两台服务器或者一台服务器一台边缘设备）上使用客户端提供的函数库进行编程
 ```c++
-#include <client.cpp>
+#include <client.h>
 #include <memory>
 #include <iostream>
 
