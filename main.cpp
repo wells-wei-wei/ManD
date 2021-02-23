@@ -1,27 +1,4 @@
-# ManD
-## 基本介绍
-本项目是一种基于UDP的单播/组播通信服务，旨在使得服务器之间信息交互或者边云协同更加方便。ManD来源于使命一词（Mandate）。
-## 基本架构
-本项目分为两部分。分别是守护进程和客户端。使用时首先由客户端与守护进程进行连接，之后客户端只需调用命令，即可将单播、组播等任务交予守护进程代为完成。
-
-守护进程可以与某个客户端运行在同一台设备上，也可以单独运行在一台设备上。目前本项目仅支持局域网内的组播。
-
-## 编译
-编译daemon：
-```
-g++ src/daemon.cpp -o bin/daemon -std=c++1z -pthread
-g++ main.cpp -I src -o bin/main -std=c++1z -pthread
-```
-目前项目仅支持c++17
-
-## 使用
-1. 启动守护进程
-```
-./bin/daemon
-```
-2. 在两个其他的设备（可以是两台服务器或者一台服务器一台边缘设备）上使用客户端提供的函数库进行编程
-```c++
-#include <client.cpp>
+#include <client.h>
 #include <memory>
 #include <iostream>
 
@@ -52,4 +29,3 @@ int main(){
     std::cout<<cli->receive()<<std::endl;
     
 }
-```

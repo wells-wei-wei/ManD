@@ -1,3 +1,6 @@
+#ifndef _CLIENT_H_
+#define _CLIENT_H_
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -460,25 +463,27 @@ private:
     }
 };
 
-int main(){
-    std::shared_ptr<client> cli(client::get_instance("10.112.212.188", 9000));
+// int main(){
+//     std::shared_ptr<client> cli(client::get_instance("10.112.212.188", 9000));
 
-    // cli->connect("user2");
+//     // cli->connect("user2");
 
-    // int num;
-    // while(!cli->mail_size(num)){} 
-    // std::cout<<cli->receive()<<std::endl;
+//     // int num;
+//     // while(!cli->mail_size(num)){} 
+//     // std::cout<<cli->receive()<<std::endl;
 
-    cli->join("d2");
-    int num;
-    while(!cli->mail_size(num)){} 
-    std::cout<<cli->receive()<<std::endl;
+//     cli->join("d2");
+//     int num;
+//     while(!cli->mail_size(num)){} 
+//     std::cout<<cli->receive()<<std::endl;
 
-    //cli.drop("d");
-    //cli.unicast("user1","hellop");
-    //cli->multicast("d","hellopd");
+//     //cli.drop("d");
+//     //cli.unicast("user1","hellop");
+//     //cli->multicast("d","hellopd");
 
-    //std::cout<<cli.receive()<<std::endl;
-    //cli->multicast("d2","wells");
+//     //std::cout<<cli.receive()<<std::endl;
+//     //cli->multicast("d2","wells");
     
-}
+// }
+
+#endif
